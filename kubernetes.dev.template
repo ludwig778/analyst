@@ -1,0 +1,85 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: ${PROJECT}-dev
+  labels:
+    app: ${PROJECT}-dev
+spec:
+  selector:
+    matchLabels:
+      app: ${PROJECT}-dev
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: ${PROJECT}-dev
+    spec:
+      imagePullSecrets:
+      - name: regcred
+      containers:
+      - name: ${PROJECT}-dev
+        env:
+        - name: DEBUG
+          value: "true"
+        - name: PGDATABASE
+          value: analyst
+        - name: PGHOST
+          value: localhost
+        - name: PGPASSWORD
+          value: analyst123
+        - name: PGUSER
+          value: analyst
+        - name: REDIS_HOST
+          value: localhost
+        - name: INFLUX_HOST
+          value: localhost
+        image: ${CI_REGISTRY}/${IMAGE_NAME}
+        ports:
+        - containerPort: 8080
+      - name: db-dev
+        env:
+        - name: POSTGRES_PASSWORD
+          value: analyst123
+        - name: POSTGRES_USER
+          value: analyst
+        image: postgres:9.6
+      - name: influxdb-dev
+        image: influxdb:latest
+      - name: redis-dev
+        args:
+        - redis-server
+        - --appendonly
+        - "yes"
+        image: redis:5.0.5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${PROJECT}-dev
+  labels:
+    app: ${PROJECT}-dev
+spec:
+  selector:
+    app: ${PROJECT}-dev
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ${PROJECT}-dev
+  annotations:
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    traefik.ingress.kubernetes.io/whitelist-source-range: "192.168.0.0/24, 10.8.0.0/24"
+spec:
+  rules:
+  - host: ${PROJECT}.${DEV_DOMAIN}
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: ${PROJECT}-dev
+          servicePort: 8080

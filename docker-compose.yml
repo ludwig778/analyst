@@ -1,0 +1,41 @@
+version: "3.7"
+
+
+services:
+  analyst:
+    image: analyst:v1
+    volumes:
+      - ./:/home/analyst/analyst
+    ports:
+      - "8080:8080"
+    build: .
+    env_file: .env
+    environment:
+      PYTHONSTARTUP: /home/analyst/analyst/startup.py
+      PGHOST: db
+      PGDATABASE: analyst
+      PGUSER: analyst
+      PGPASSWORD: analyst123
+      REDIS_HOST: redis
+      INFLUXDB_HOST: influxdb
+      INFLUXDB_DATABASE: analyst
+      ALPHA_VANTAGE_URL: https://www.alphavantage.co
+      INVESTING_URL: https://www.investing.com
+      DEBUG: "true"
+    depends_on:
+      - db
+      - redis
+      - influxdb
+
+  db:
+    image: postgres:9.6
+    environment:
+      POSTGRES_USER: analyst
+      POSTGRES_PASSWORD: analyst123
+
+  redis:
+    image: redis:5.0.5
+    command: redis-server --appendonly yes
+
+  influxdb:
+    image: influxdb:latest

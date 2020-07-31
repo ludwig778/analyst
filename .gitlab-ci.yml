@@ -1,0 +1,74 @@
+variables:
+  TAG: latest
+  PROJECT: analyst
+  IMAGE_NAME: $PROJECT:$TAG
+  DEV_DOMAIN: dev.hartware.fr
+  PROD_DOMAIN: hartware.fr
+
+stages:
+  - setup
+  - review
+
+setup:
+  stage: setup
+  image: ludwig778/runner-slave:latest
+  script:
+    - docker build -t registry.hartware.fr/$IMAGE_NAME .
+    - docker images
+    - docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY <<< $CI_REGISTRY_PASSWORD
+    - docker push registry.hartware.fr/$IMAGE_NAME
+
+review_dev:
+  stage: review
+  image: ludwig778/runner-slave:latest
+  script:
+    - envsubst < kubernetes.dev.template > kubernetes.yml
+    - kubectl delete --ignore-not-found -f kubernetes.yml
+    - docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY <<< $CI_REGISTRY_PASSWORD
+    - kubectl apply -f kubernetes.yml
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    url: https://$PROJECT.$DEV_DOMAIN
+    on_stop: stop_review_dev
+  except:
+    - master
+
+review_prod:
+  stage: review
+  image: ludwig778/runner-slave:latest
+  script:
+    - envsubst < kubernetes.prod.template > kubernetes.yml
+    - docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY <<< $CI_REGISTRY_PASSWORD
+    - kubectl apply -f kubernetes.yml
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    url: https://$PROJECT.$PROD_DOMAIN
+    on_stop: stop_review_prod
+  only:
+    - master
+        
+stop_review_dev:
+  stage: review
+  image: ludwig778/runner-slave:latest
+  script:
+    - envsubst < kubernetes.dev.template > kubernetes.yml
+    - kubectl delete --ignore-not-found -f kubernetes.yml
+  when: manual
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    action: stop
+  except:
+    - master
+
+stop_review_prod:
+  stage: review
+  image: ludwig778/runner-slave:latest
+  script:
+    - envsubst < kubernetes.prod.template > kubernetes.yml
+    - kubectl delete --ignore-not-found -f kubernetes.yml
+  when: manual
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    action: stop
+  only:
+    - master
